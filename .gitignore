@@ -1,0 +1,12 @@
+/target
+**/target
+
+# Captures taken while developing. The shots in docs/images are the ones to keep.
+/shot-*.png
+/run.log
+/run.err
+
+# Session files belong to the agents, never to this repo.
+**/.claude/
+**/.codex/
+**/.kimi-code/

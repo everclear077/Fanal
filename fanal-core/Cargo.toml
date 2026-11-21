@@ -1,0 +1,11 @@
+[package]
+name = "fanal-core"
+version = "0.1.0"
+edition = "2021"
+description = "Detection core for Fanal, a local status lamp for desktop coding agents."
+license = "MIT"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

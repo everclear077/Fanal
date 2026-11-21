@@ -1,0 +1,54 @@
+# Fanal
+
+A notch that sits on the top edge of the screen and shows one lamp for every coding agent on the machine. Green means it is working, amber means it has stopped on something only you can answer, red means it is not running. There is no status text. The colour is the whole message.
+
+[中文说明](README.zh-CN.md)
+
+At rest it is a small black lip. It opens on its own when an agent needs you or a task that was running has stopped, and it opens fully while the pointer is over it. The pointer can leave for a moment without the panel closing. Clicking a row brings that agent's own window to the front, maximised. Fanal never answers a prompt for you.
+
+![The panel open, with Codex waiting and Claude Code working](docs/images/panel.png)
+
+The notch at rest, and the same notch after it opened itself because Codex stopped on `auth.ts`:
+
+![The notch at rest](docs/images/notch.png)
+![The notch opened on its own](docs/images/alert.png)
+
+## Settings
+
+The gear at the bottom of the panel opens settings: which agents are watched, whether the notch opens by itself, whether an amber lamp raises a Windows notification, and the language and theme. Settings are kept in `%APPDATA%\Fanal\settings.json`, which is Fanal's own directory and never an agent's.
+
+![Settings](docs/images/settings.png)
+
+A lamp in the tray follows the worst colour on the board. Amber outranks green, green outranks red.
+
+## What it watches
+
+Claude Code, Cursor, DeepSeek Harness, Codex, Kimi, Kimi Code, Orca, ChatGPT, Gemini, Trae, Kiro, Qoder, Antigravity, OpenCode, and Devin.
+
+Every agent is detected from its process. Claude Code, Codex, and Kimi Code also have a session file whose format was checked against real files, so those three can say what they are doing rather than only that they are running. The details, including what Fanal refuses to read out of a session file, are in [docs/AGENTS.md](docs/AGENTS.md).
+
+## Build
+
+Fanal is a [Tauri](https://tauri.app) 2 application. The window and the panel are Rust plus a small page with no build step; the decision about which colour a lamp gets is a separate crate, `fanal-core`, with no dependencies beyond serde, so it can be tested on its own.
+
+```
+cargo test --manifest-path fanal-core/Cargo.toml
+cargo build --manifest-path src-tauri/Cargo.toml
+```
+
+The debug build is `src-tauri/target/debug/fanal.exe`. An installer is produced with `cargo tauri build` from `src-tauri`, which needs the [Tauri prerequisites](https://tauri.app/start/prerequisites/) and WebView2.
+
+Rust 1.90 or newer. The panel is Windows only; `fanal-core` is not.
+
+## Layout
+
+```
+fanal-core/     lamp decisions and session parsers, with their tests
+src-tauri/      the desktop app: process scan, window focus, tray, notifications
+ui/             the panel: one page, one stylesheet, one script
+docs/           how detection works, and the screenshots above
+```
+
+## License
+
+[MIT](LICENSE)
