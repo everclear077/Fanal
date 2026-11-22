@@ -60,24 +60,8 @@ fn save_settings(state: State<AppState>, settings: Settings) -> Result<(), Strin
 fn open_agent(id: AgentId) -> Result<(), String> {
     #[cfg(windows)]
     {
-        use sysinfo::{ProcessesToUpdate, System};
-        let mut system = System::new();
-        system.refresh_processes(ProcessesToUpdate::All, true);
-        let wanted = process_names(id);
-        let pid = system.processes().values().find_map(|process| {
-            let name = process
-                .name()
-                .to_string_lossy()
-                .trim_end_matches(".exe")
-                .to_ascii_lowercase();
-            if wanted.contains(&name.as_str()) {
-                Some(process.pid())
-            } else {
-                None
-            }
-        });
-        if let Some(pid) = pid {
-            if windowing::focus(pid.as_u32()) {
+        if let Some(pid) = collect::running_pid(id) {
+            if windowing::focus(pid) {
                 return Ok(());
             }
         }
@@ -98,21 +82,14 @@ fn open_agent(id: AgentId) -> Result<(), String> {
     }
 }
 
-fn process_names(id: AgentId) -> &'static [&'static str] {
-    fanal_core::builtin_catalog()
-        .into_iter()
-        .find(|profile| profile.id == id)
-        .map(|profile| profile.processes)
-        .unwrap_or(&[])
-}
-
 /// A 32px lamp, the same colour the panel would show for this severity.
 fn lamp_icon(lamp: Lamp) -> Image<'static> {
     const SIZE: usize = 32;
     let (red, green, blue) = match lamp {
         Lamp::Green => (48, 209, 88),
-        Lamp::Amber => (255, 159, 10),
+        Lamp::Yellow => (255, 159, 10),
         Lamp::Red => (255, 69, 58),
+        Lamp::Grey => (139, 142, 152),
     };
     let mut pixels = vec![0u8; SIZE * SIZE * 4];
     let center = (SIZE as f32 - 1.0) / 2.0;
@@ -134,9 +111,10 @@ fn lamp_icon(lamp: Lamp) -> Image<'static> {
 
 fn tooltip_for(board: &Board) -> String {
     match board.severity.lamp {
-        Lamp::Amber => format!("Fanal \u{2014} {} waiting", board.severity.attention),
+        Lamp::Red => format!("Fanal \u{2014} {} waiting", board.severity.attention),
         Lamp::Green => format!("Fanal \u{2014} {} running", board.severity.running),
-        Lamp::Red => "Fanal".to_string(),
+        Lamp::Yellow => format!("Fanal \u{2014} {} idle", board.severity.idle),
+        Lamp::Grey => "Fanal".to_string(),
     }
 }
 
@@ -146,12 +124,12 @@ fn announce(app: &tauri::AppHandle, current: &Board, previous: &[AgentId]) {
         return;
     }
     for agent in &current.agents {
-        if agent.lamp == Lamp::Amber && !previous.contains(&agent.id) {
+        if agent.lamp == Lamp::Red && !previous.contains(&agent.id) {
             let _ = app
                 .notification()
                 .builder()
                 .title(agent.id.display_name())
-                .body("Waiting for you")
+                .body("Needs you")
                 .show();
         }
     }
@@ -160,9 +138,9 @@ fn announce(app: &tauri::AppHandle, current: &Board, previous: &[AgentId]) {
 fn watch(app: tauri::AppHandle, tray: TrayIcon) {
     std::thread::spawn(move || {
         let mut shown = None;
-        // Seeded from the first reading, so a lamp that was already amber when
-        // Fanal started does not raise a toast on every launch.
-        let mut amber: Vec<AgentId> = Vec::new();
+        // Seeded from the first reading, so a confirmation that was already up
+        // when Fanal started does not raise a toast on every launch.
+        let mut waiting: Vec<AgentId> = Vec::new();
         let mut primed = false;
         loop {
             let current = board(app.state::<AppState>().inner());
@@ -172,13 +150,13 @@ fn watch(app: tauri::AppHandle, tray: TrayIcon) {
                 let _ = tray.set_tooltip(Some(tooltip_for(&current)));
             }
             if primed {
-                announce(&app, &current, &amber);
+                announce(&app, &current, &waiting);
             }
             primed = true;
-            amber = current
+            waiting = current
                 .agents
                 .iter()
-                .filter(|agent| agent.lamp == Lamp::Amber)
+                .filter(|agent| agent.lamp == Lamp::Red)
                 .map(|agent| agent.id)
                 .collect();
             std::thread::sleep(Duration::from_secs(2));
@@ -186,11 +164,14 @@ fn watch(app: tauri::AppHandle, tray: TrayIcon) {
     });
 }
 
-/// The panel anchors to the top centre of the monitor it is on.
-fn place(window: &WebviewWindow) {
-    if let (Ok(Some(monitor)), Ok(size)) = (window.current_monitor(), window.outer_size()) {
+/// The panel anchors to the top centre of the monitor it is on. The width is
+/// passed in rather than read back: the size just set has not landed yet, and
+/// centring on the old one shoves a shrinking window off the screen.
+fn place(window: &WebviewWindow, width: f64) {
+    if let (Ok(Some(monitor)), Ok(scale)) = (window.current_monitor(), window.scale_factor()) {
         let area = monitor.work_area();
-        let x = area.position.x + (area.size.width as i32 - size.width as i32) / 2;
+        let wide = (width * scale).round() as i32;
+        let x = area.position.x + (area.size.width as i32 - wide) / 2;
         let _ = window.set_position(tauri::PhysicalPosition::new(x, area.position.y));
     }
 }
@@ -202,14 +183,18 @@ fn fit_panel(window: WebviewWindow, width: f64, height: f64) {
     // enough to contain the hand that opened it. The painted panel is the
     // content height; the extra is transparent.
     let hit = height.max(48.0);
+    place(&window, width);
     let _ = window.set_size(tauri::LogicalSize::new(width, hit));
-    place(&window);
 }
 
 pub fn run() {
     let state = AppState {
         collector: Mutex::new(Collector::new()),
-        settings: Mutex::new(collect::load_settings()),
+        settings: Mutex::new({
+            let mut settings = collect::load_settings();
+            settings.reconcile();
+            settings
+        }),
     };
 
     tauri::Builder::default()
@@ -223,7 +208,7 @@ pub fn run() {
         ])
         .setup(|app| {
             let tray = TrayIconBuilder::with_id("fanal")
-                .icon(lamp_icon(Lamp::Red))
+                .icon(lamp_icon(Lamp::Grey))
                 .tooltip("Fanal")
                 .build(app)?;
             watch(app.handle().clone(), tray);
@@ -235,7 +220,7 @@ pub fn run() {
             if let tauri::RunEvent::Ready = event
                 && let Some(window) = app.get_webview_window("main")
             {
-                place(&window);
+                place(&window, 132.0);
                 let _ = window.show();
             }
         });

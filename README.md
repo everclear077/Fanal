@@ -1,6 +1,6 @@
 # Fanal
 
-A notch that sits on the top edge of the screen and shows one lamp for every coding agent on the machine. Green means it is working, amber means it has stopped on something only you can answer, red means it is not running. There is no status text. The colour is the whole message.
+A notch that sits on the top edge of the screen and shows one lamp for every coding agent on the machine. Grey means the program is not running. Yellow means its client is open and idle. Green means a task is executing. Red means a task has opened a confirmation and is waiting on you. There is no status text. The colour is the whole message.
 
 [中文说明](README.zh-CN.md)
 
@@ -8,22 +8,22 @@ At rest it is a small black lip. It opens on its own when an agent needs you or 
 
 ![The panel open, with Codex waiting and Claude Code working](docs/images/panel.png)
 
-The notch at rest, and the same notch after it opened itself because Codex stopped on `auth.ts`:
+The notch at rest, and the same notch after it opened itself because Codex is waiting on `auth.ts`:
 
 ![The notch at rest](docs/images/notch.png)
 ![The notch opened on its own](docs/images/alert.png)
 
 ## Settings
 
-The gear at the bottom of the panel opens settings: which agents are watched, whether the notch opens by itself, whether an amber lamp raises a Windows notification, and the language and theme. Settings are kept in `%APPDATA%\Fanal\settings.json`, which is Fanal's own directory and never an agent's.
+The gear at the bottom of the panel opens settings: which agents are watched, whether the notch opens by itself, whether a confirmation raises a Windows notification, and the language and theme. Settings are kept in `%APPDATA%\Fanal\settings.json`, which is Fanal's own directory and never an agent's.
 
 ![Settings](docs/images/settings.png)
 
-A lamp in the tray follows the worst colour on the board. Amber outranks green, green outranks red.
+A lamp in the tray follows the most urgent colour on the board. Red outranks green, green outranks yellow, yellow outranks grey.
 
 ## What it watches
 
-Claude Code, Cursor, DeepSeek Harness, Codex, Kimi, Kimi Code, Orca, ChatGPT, Gemini, Trae, Kiro, Qoder, Antigravity, OpenCode, and Devin.
+Claude Code, Claude Desktop, Cursor, DeepSeek Harness, Codex, Kimi, Kimi Code, Orca, ChatGPT, Gemini, Trae, Kiro, Qoder, Antigravity, OpenCode, and Devin.
 
 Every agent is detected from its process. Claude Code, Codex, and Kimi Code also have a session file whose format was checked against real files, so those three can say what they are doing rather than only that they are running. The details, including what Fanal refuses to read out of a session file, are in [docs/AGENTS.md](docs/AGENTS.md).
 

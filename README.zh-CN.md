@@ -1,6 +1,6 @@
 # Fanal 号灯
 
-一条贴在屏幕最上方的刘海，为本机上的每一个编程 Agent 亮一盏灯。绿色是正在工作，黄色是停在了只有你能回答的地方，红色是没有在跑。没有状态文字，颜色就是全部的意思。
+一条贴在屏幕最上方的刘海，为本机上的每一个编程 Agent 亮一盏灯。灰色是程序没启动。黄色是客户端开着，但没有任务在执行。绿色是有任务正在执行。红色是任务弹出了确认框，需要你介入。没有状态文字，颜色就是全部的意思。
 
 [English](README.md)
 
@@ -8,22 +8,22 @@
 
 ![面板展开，Codex 在等待，Claude Code 在工作](docs/images/panel.png)
 
-收起时的刘海，以及 Codex 停在 `auth.ts` 上之后它自己弹开的样子：
+收起时的刘海，以及 Codex 在 `auth.ts` 上等确认、刘海自己弹开的样子：
 
 ![收起的刘海](docs/images/notch.png)
 ![自己弹开的刘海](docs/images/alert.png)
 
 ## 设置
 
-面板底部的齿轮打开设置：监视哪些 Agent、刘海要不要自己弹开、黄灯时要不要发一条 Windows 通知，以及语言和主题。设置保存在 `%APPDATA%\Fanal\settings.json`，这是 Fanal 自己的目录，不是任何一个 Agent 的。
+面板底部的齿轮打开设置：监视哪些 Agent、刘海要不要自己弹开、弹出确认框时要不要发一条 Windows 通知，以及语言和主题。设置保存在 `%APPDATA%\Fanal\settings.json`，这是 Fanal 自己的目录，不是任何一个 Agent 的。
 
 ![设置](docs/images/settings.png)
 
-托盘里的灯跟着整块面板上最严重的颜色走。黄灯优先于绿灯，绿灯优先于红灯。
+托盘里的灯跟着整块面板上最紧急的颜色走。红灯优先于绿灯，绿灯优先于黄灯，黄灯优先于灰灯。
 
 ## 它监视哪些
 
-Claude Code、Cursor、DeepSeek Harness、Codex、Kimi、Kimi Code、Orca、ChatGPT、Gemini、Trae、Kiro、Qoder、Antigravity、OpenCode 和 Devin。
+Claude Code、Claude Desktop、Cursor、DeepSeek Harness、Codex、Kimi、Kimi Code、Orca、ChatGPT、Gemini、Trae、Kiro、Qoder、Antigravity、OpenCode 和 Devin。
 
 每个 Agent 都从进程判断。Claude Code、Codex 和 Kimi Code 另外有一份拿真实文件核过格式的会话文件，所以这三个能说出自己在做什么，而不只是在不在跑。细节，包括 Fanal 拒绝从会话文件里读什么，写在 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)。
 

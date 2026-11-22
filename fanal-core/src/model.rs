@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 pub enum AgentId {
     #[serde(rename = "claude-code")]
     ClaudeCode,
+    #[serde(rename = "claude-desktop")]
+    ClaudeDesktop,
     #[serde(rename = "cursor")]
     Cursor,
     #[serde(rename = "deepseek-harness")]
@@ -37,8 +39,9 @@ pub enum AgentId {
 }
 
 impl AgentId {
-    pub const ALL: [AgentId; 15] = [
+    pub const ALL: [AgentId; 16] = [
         AgentId::ClaudeCode,
+        AgentId::ClaudeDesktop,
         AgentId::Cursor,
         AgentId::DeepseekHarness,
         AgentId::Codex,
@@ -67,6 +70,7 @@ impl AgentId {
     fn profile(self) -> (&'static str, &'static str) {
         match self {
             AgentId::ClaudeCode => ("Claude Code", "claude-code"),
+            AgentId::ClaudeDesktop => ("Claude Desktop", "claude-desktop"),
             AgentId::Cursor => ("Cursor", "cursor"),
             AgentId::DeepseekHarness => ("DeepSeek Harness", "deepseek-harness"),
             AgentId::Codex => ("Codex", "codex"),
@@ -85,27 +89,30 @@ impl AgentId {
     }
 }
 
-/// What the lamp says. There are exactly three colours; a fourth would be a
-/// product decision, not a detection nuance.
+/// What the lamp says. Grey is the absence of a process, not a fourth kind of
+/// task: the other three describe a client that is actually open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Lamp {
-    /// The agent is running and producing output.
+    /// A task is executing.
     Green,
-    /// The agent is stopped, waiting for the user to confirm something.
-    Amber,
-    /// The agent is not running.
+    /// The client is open and no task is running.
+    Yellow,
+    /// A task has opened a confirmation and is waiting on the user.
     Red,
+    /// The program is installed and its process is not running.
+    Grey,
 }
 
 impl Lamp {
-    /// Amber outranks green, green outranks red. This is the colour the tray
-    /// icon and the collapsed lip use.
+    /// A confirmation outranks a running task, which outranks an idle client,
+    /// which outranks a closed one. The tray icon takes the highest.
     pub fn rank(self) -> u8 {
         match self {
-            Lamp::Amber => 2,
-            Lamp::Green => 1,
-            Lamp::Red => 0,
+            Lamp::Red => 3,
+            Lamp::Green => 2,
+            Lamp::Yellow => 1,
+            Lamp::Grey => 0,
         }
     }
 }
@@ -118,8 +125,8 @@ pub struct AgentSnapshot {
     /// One short sentence about what it is doing. Never a status word: the
     /// colour already says that.
     pub detail: String,
-    /// True when the colour comes from a session file rather than merely from
-    /// the process existing. The panel renders a process-only reading quieter.
+    /// True when a session file decided the colour. On a grey lamp it means the
+    /// program is installed, which is what keeps a closed row in the list.
     pub from_session: bool,
 }
 
@@ -127,24 +134,31 @@ pub struct AgentSnapshot {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Severity {
     pub lamp: Lamp,
+    /// Tasks waiting on a confirmation.
     pub attention: usize,
+    /// Tasks actually executing.
     pub running: usize,
+    /// Clients that are open with nothing running.
+    pub idle: usize,
+    /// Installed programs whose process is not running.
     pub stopped: usize,
 }
 
 impl Severity {
     pub fn from_snapshots(snapshots: &[AgentSnapshot]) -> Self {
         let mut severity = Severity {
-            lamp: Lamp::Red,
+            lamp: Lamp::Grey,
             attention: 0,
             running: 0,
+            idle: 0,
             stopped: 0,
         };
         for snapshot in snapshots {
             match snapshot.lamp {
-                Lamp::Amber => severity.attention += 1,
+                Lamp::Red => severity.attention += 1,
                 Lamp::Green => severity.running += 1,
-                Lamp::Red => severity.stopped += 1,
+                Lamp::Yellow => severity.idle += 1,
+                Lamp::Grey => severity.stopped += 1,
             }
             if snapshot.lamp.rank() > severity.lamp.rank() {
                 severity.lamp = snapshot.lamp;

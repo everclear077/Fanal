@@ -8,21 +8,22 @@ Fanal decides a lamp from two facts: whether the agent's process is running, and
 
 | Lamp | Meaning |
 | --- | --- |
-| Green | The process is running. When a fresh session says it is working, the row also names what it is working on. |
-| Amber | A fresh session stopped on something only the user can answer. |
-| Red | The process is not running. |
+| Grey | The program is installed and no process is running. |
+| Yellow | The client is open and no task is executing. An open client with no session reading is yellow, because a process can only say that the window is open. |
+| Green | A session written during this run says a task is executing. The row names what it is working on. |
+| Red | A session written during this run says a task opened a confirmation and is waiting on the user. |
 
-A session reading older than 45 seconds is ignored. The lamp then follows the process alone, so a file left behind by a crashed session cannot keep a lamp amber. An agent the user has switched off in settings disappears entirely.
+A session file last written before its process started is ignored, so a file left by an earlier run cannot keep a lamp red or green. While the process is still running, the last status stands even if the file is not rewritten. An agent the user has switched off in settings disappears entirely, and an agent added to the catalog after the settings file was saved stays off until it is switched on.
 
-Amber outranks green and green outranks red. The tray icon and the collapsed notch take the highest colour on the board.
+Red outranks green, green outranks yellow, and yellow outranks grey. The tray icon and the collapsed notch take the highest colour on the board.
 
 ## Three kinds of reading
 
-Only three agents have a session format that was checked against real files. Every other agent is read from its process, which can say that it is running and nothing more. A process-only green carries no detail line, which is the honest version of "the window is open".
+Only three agents have a session format that was checked against real files. Every other agent is read from its process, which can say that the window is open and nothing more. A process-only lamp is yellow and carries no detail line, which is the honest version of "the window is open".
 
 ### Claude Code
 
-`%USERPROFILE%\.claude\sessions\<pid>.json`, and the newest file wins when several sessions are live. `status` is the only field that decides the lamp.
+`%USERPROFILE%\.claude\sessions\<pid>.json`, one file per live process. When several are live, a confirmation outranks a running task, which outranks an idle session. `status` is the only field that decides the lamp.
 
 | `status` | Reading |
 | --- | --- |
@@ -38,7 +39,7 @@ The last segment of `cwd` becomes the detail line. A status Fanal does not recog
 
 `session_meta` carries the working directory. An `event_msg` whose payload type is `task_started` opens a turn; `task_complete` or `turn_aborted` closes it. An open turn reads as working, a closed one as idle.
 
-Codex records its approval policy once, for the whole thread, rather than per turn. There is no event that reliably says a turn is waiting on the user, so Codex does not produce an amber lamp yet.
+Codex records its approval policy once, for the whole thread, rather than per turn. There is no event that reliably says a turn is waiting on the user, so Codex does not produce a red lamp yet. An open Codex with no running task is yellow.
 
 ### Kimi Code
 
@@ -50,7 +51,8 @@ A process matches on its image name, compared in lowercase with `.exe` removed.
 
 | Agent | Image names |
 | --- | --- |
-| Claude Code | `claude` |
+| Claude Code | `claude`, except the Store package |
+| Claude Desktop | `claude` inside a `WindowsApps\Claude_<version>` package |
 | Cursor | `cursor` |
 | DeepSeek Harness | `deepseek harness` |
 | Codex | `codex`, `chatgpt` |
@@ -66,7 +68,7 @@ A process matches on its image name, compared in lowercase with `.exe` removed.
 | OpenCode | `opencode` |
 | Devin | `devin` |
 
-Codex and the ChatGPT desktop app ship under the same image name, so a running ChatGPT app also lights the Codex lamp. Clicking a row focuses that process's window, or launches the executable the running process was started from.
+Codex and the ChatGPT desktop app ship under the same image name, so a running ChatGPT app also lights the Codex lamp. The Codex session file is only read while a `codex` process is running, so ChatGPT cannot keep that lamp green on its own. Clicking a row focuses that process's window. A closed program is launched from the path Windows recorded for it.
 
 ## What is deliberately not read
 

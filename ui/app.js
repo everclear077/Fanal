@@ -5,10 +5,11 @@
 const invoke = (command, args = {}) =>
   window.__TAURI_INTERNALS__.invoke(command, args);
 
-const MARK_FOR = { "claude-code": "claude" };
+const MARK_FOR = { "claude-code": "claude", "claude-desktop": "claude" };
 
 const NAMES = {
   "claude-code": "Claude Code",
+  "claude-desktop": "Claude Desktop",
   cursor: "Cursor",
   "deepseek-harness": "DeepSeek Harness",
   codex: "Codex",
@@ -37,7 +38,7 @@ const COPY = {
     zh: "Chinese",
     notch: "Notch",
     alert: "Open when something needs you",
-    notify: "Notify on an amber lamp",
+    notify: "Notify when a task needs you",
     connected: "Agents",
     done: "Done",
     open: "Open",
@@ -54,7 +55,7 @@ const COPY = {
     zh: "中文",
     notch: "刘海",
     alert: "有情况才弹出来",
-    notify: "黄灯时发系统通知",
+    notify: "需要确认时发系统通知",
     connected: "接入的 Agent",
     done: "完成",
     open: "打开",
@@ -108,19 +109,18 @@ function noteChanges() {
   const next = {};
   board.agents.forEach((agent) => {
     next[agent.id] = agent.lamp;
-    if (seen && !hover && seen[agent.id] === "green" && agent.lamp === "red") {
+    // A confirmation is red, not a task that stopped. Only a task that was
+    // actually running and then finished opens the notch on its own.
+    if (seen && !hover && seen[agent.id] === "green" && (agent.lamp === "yellow" || agent.lamp === "grey")) {
       justStopped.add(agent.id);
     }
-    if (agent.lamp !== "red") justStopped.delete(agent.id);
+    if (agent.lamp === "green" || agent.lamp === "red") justStopped.delete(agent.id);
   });
   seen = next;
 }
 
 function needsAttention() {
-  return (
-    board.severity.attention > 0 ||
-    board.agents.some((agent) => justStopped.has(agent.id))
-  );
+  return board.agents.some((agent) => agent.lamp === "red" || justStopped.has(agent.id));
 }
 
 function view() {
@@ -140,73 +140,91 @@ function render() {
   document.documentElement.dataset.theme = resolvedTheme();
 
   const attention = board.agents.filter(
-    (agent) => agent.lamp === "amber" || justStopped.has(agent.id),
+    (agent) => agent.lamp === "red" || justStopped.has(agent.id),
   );
-  const running = board.agents.filter((agent) => agent.lamp === "green");
-  const stopped = board.agents.filter(
-    (agent) => agent.lamp === "red" && !justStopped.has(agent.id),
+  const attentionIds = new Set(attention.map((agent) => agent.id));
+  // Grey with nothing behind it means the program is not installed. It stays
+  // out of the list; the settings page is where it gets switched on.
+  const present = board.agents.filter(
+    (agent) => agent.lamp !== "grey" || agent.from_session || justStopped.has(agent.id),
+  );
+  const running = present.filter(
+    (agent) =>
+      (agent.lamp === "green" || agent.lamp === "yellow") && !attentionIds.has(agent.id),
+  );
+  const stopped = present.filter(
+    (agent) => agent.lamp === "grey" && !justStopped.has(agent.id),
   );
 
   list.replaceChildren();
-  attention.concat(running).forEach((agent) => list.appendChild(row(agent)));
+  attention.concat(running).forEach((agent) => list.appendChild(row(agent, attentionIds.has(agent.id))));
   quiet.replaceChildren();
   stopped.forEach((agent) => quiet.appendChild(quietRow(agent)));
+  document.getElementById("rule").hidden = stopped.length === 0;
 
   fit();
 }
 
 function mark(id) {
-  const lamp = document.createElement("span");
-  lamp.className = "lamp";
-  lamp.innerHTML = MARKS[MARK_FOR[id] || id] || "";
-  return lamp;
+  const node = document.createElement("span");
+  node.className = "mark";
+  node.innerHTML = MARKS[MARK_FOR[id] || id] || "";
+  return node;
 }
 
-function row(agent) {
+// A solid round button. Green is a task executing, yellow an open client with
+// nothing running, red a confirmation waiting on the user, grey a closed one.
+function bulb(lamp) {
+  const tone = { green: "go", yellow: "idle", red: "need", grey: "off" }[lamp] || "off";
+  const node = document.createElement("span");
+  node.className = "bulb " + tone;
+  return node;
+}
+
+function row(agent, popped) {
   const button = document.createElement("button");
   button.type = "button";
-  const tone = agent.lamp === "amber" ? "wait" : agent.lamp === "red" ? "stop" : "go";
-  button.className = `row ${tone}`;
-  const lamp = mark(agent.id);
-  lamp.classList.add(agent.lamp === "amber" ? "wait" : agent.lamp === "red" ? "off" : "go");
+  const tone = { green: "go", yellow: "idle", red: "need", grey: "stop" }[agent.lamp] || "stop";
+  button.className = popped ? `row ${tone} pop` : `row ${tone}`;
   const text = document.createElement("span");
   text.className = "text";
   const name = document.createElement("span");
   name.className = "name";
   name.textContent = NAMES[agent.id] || agent.id;
-  const sub = document.createElement("span");
-  sub.className = "sub";
-  sub.textContent = agent.detail || "";
-  text.append(name, sub);
-  button.append(lamp, text);
-  if (agent.lamp === "amber") {
+  text.append(name);
+  const side = document.createElement("span");
+  side.className = "side";
+  if (agent.detail) {
+    const sub = document.createElement("span");
+    sub.className = "sub";
+    sub.textContent = agent.detail;
+    side.append(sub);
+  }
+  if (agent.lamp === "red") {
     const open = document.createElement("span");
     open.className = "open";
     open.textContent = t("open");
-    button.append(open);
+    side.append(open);
   }
+  side.append(bulb(agent.lamp));
+  button.append(mark(agent.id), text, side);
   button.addEventListener("click", () => invoke("open_agent", { id: agent.id }));
   return button;
 }
 
 function quietRow(agent) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "q";
-  const lamp = mark(agent.id);
-  lamp.classList.add("off");
-  const name = document.createElement("span");
-  name.textContent = NAMES[agent.id] || agent.id;
-  button.append(lamp, name);
-  button.addEventListener("click", () => invoke("open_agent", { id: agent.id }));
-  return button;
+  return row(agent);
 }
+
+const HOVER_WIDTH = 332;
 
 function panelWidth() {
   const current = panel.dataset.view;
-  if (current === "hover") return 400;
-  if (current === "alert") return Math.ceil(panel.scrollWidth);
-  return 132;
+  if (current === "hover") return HOVER_WIDTH;
+  if (current !== "alert") return 132;
+  const pops = list.querySelectorAll(".row.pop");
+  if (list.querySelector(".row.pop.need")) return Math.min(HOVER_WIDTH, 300);
+  return Math.min(HOVER_WIDTH, Math.max(132, 24 + pops.length * 52));
 }
 
 // The window is resized from the content, so the measurement has to happen
@@ -218,7 +236,7 @@ function fit() {
   requestAnimationFrame(() => {
     if (frame !== fitFrame) return;
     const height = Math.ceil(panel.getBoundingClientRect().height);
-    invoke("fit_panel", { width: panelWidth(), height: Math.max(height, 11) });
+    invoke("fit_panel", { width: panelWidth(), height: Math.max(height, 11), note: "" });
   });
 }
 
@@ -227,6 +245,7 @@ function segment(box, values, current, apply) {
   values.forEach((value) => {
     const button = document.createElement("button");
     button.type = "button";
+    button.dataset.value = value;
     button.textContent = t(value);
     button.className = current === value ? "on" : "";
     button.addEventListener("click", () => {
@@ -254,10 +273,8 @@ function renderSettings() {
     label.className = "check";
     const input = document.createElement("input");
     input.type = "checkbox";
+    input.dataset.id = agent.id;
     input.checked = agent.enabled;
-    input.addEventListener("change", () => {
-      agent.enabled = input.checked;
-    });
     const name = document.createElement("span");
     name.textContent = NAMES[agent.id] || agent.id;
     label.append(input, name);
@@ -265,13 +282,38 @@ function renderSettings() {
   });
 }
 
+// The form is the copy being edited. A poll must not replace it, or the
+// click on Done saves the reading from before the boxes were changed.
+let poll = 0;
 async function refresh() {
+  const ticket = ++poll;
   try {
-    board = await invoke("snapshot");
+    const next = await invoke("snapshot");
+    if (ticket !== poll || !next) return;
+    if (panel.dataset.page === "settings" && board) next.settings = board.settings;
+    board = next;
     render();
   } catch (error) {
     console.error(error);
   }
+}
+
+function chosen(box) {
+  const button = box.querySelector("button.on");
+  return button ? button.dataset.value : "";
+}
+
+function applyForm() {
+  board.settings.alert_on_attention = document.getElementById("alert").checked;
+  board.settings.notify_on_amber = document.getElementById("notify").checked;
+  const language = chosen(languageBox);
+  const theme = chosen(themeBox);
+  if (language) board.settings.language = language;
+  if (theme) board.settings.theme = theme;
+  grid.querySelectorAll("input[data-id]").forEach((input) => {
+    const agent = board.settings.agents.find((item) => item.id === input.dataset.id);
+    if (agent) agent.enabled = input.checked;
+  });
 }
 
 document.getElementById("gear").addEventListener("click", () => {
@@ -282,8 +324,8 @@ document.getElementById("gear").addEventListener("click", () => {
 
 document.getElementById("settings").addEventListener("submit", async (event) => {
   event.preventDefault();
-  board.settings.alert_on_attention = document.getElementById("alert").checked;
-  board.settings.notify_on_amber = document.getElementById("notify").checked;
+  applyForm();
+  poll += 1;
   await invoke("save_settings", { settings: board.settings });
   panel.dataset.page = "agents";
   await refresh();

@@ -18,6 +18,13 @@ pub fn builtin_catalog() -> Vec<AgentProfile> {
             processes: &["claude"],
             session: true,
         },
+        // The desktop app ships the same image name as the CLI. The collector
+        // tells them apart by where the executable lives.
+        AgentProfile {
+            id: AgentId::ClaudeDesktop,
+            processes: &["claude"],
+            session: false,
+        },
         AgentProfile {
             id: AgentId::Cursor,
             processes: &["cursor"],
@@ -28,6 +35,9 @@ pub fn builtin_catalog() -> Vec<AgentProfile> {
             processes: &["deepseek harness"],
             session: false,
         },
+        // `chatgpt` is the desktop app, which ships the same image name. A
+        // running ChatGPT lights this lamp. The session file and the program
+        // Fanal launches still belong to `codex` only.
         AgentProfile {
             id: AgentId::Codex,
             processes: &["codex", "chatgpt"],
@@ -137,7 +147,7 @@ pub struct Settings {
     pub language: Language,
     /// Grow the lip on its own when something needs the user.
     pub alert_on_attention: bool,
-    /// Also raise a Windows notification for an amber lamp.
+    /// Also raise a Windows notification when a task opens a confirmation.
     pub notify_on_amber: bool,
     pub agents: Vec<AgentConfig>,
 }
@@ -158,11 +168,26 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// An id the saved file does not mention stays off. A file written before
+    /// an agent was added to the catalog would otherwise start watching it.
     pub fn enabled(&self, id: AgentId) -> bool {
         self.agents
             .iter()
             .find(|agent| agent.id == id)
             .map(|agent| agent.enabled)
-            .unwrap_or(true)
+            .unwrap_or(false)
+    }
+
+    /// Add catalog entries the file does not have, switched off, and drop ids
+    /// the catalog no longer knows. The user's choices for known ids stay.
+    pub fn reconcile(&mut self) {
+        let known: Vec<AgentConfig> = AgentId::ALL
+            .into_iter()
+            .map(|id| AgentConfig {
+                id,
+                enabled: self.enabled(id),
+            })
+            .collect();
+        self.agents = known;
     }
 }

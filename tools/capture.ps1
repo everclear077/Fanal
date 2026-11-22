@@ -1,6 +1,7 @@
 param(
   [string]$IdleShot,
-  [string]$HoverShot
+  [string]$HoverShot,
+  [switch]$Settings
 )
 
 Add-Type -AssemblyName System.Drawing
@@ -47,20 +48,46 @@ $cur = New-Object FanalWin+POINT
 [void][FanalWin]::GetCursorPos([ref]$cur)
 Write-Output "cursor was $($cur.X),$($cur.Y)"
 
+function Wait-Settled([int]$wantW, [int]$minW, [int]$maxW) {
+  $stable = $null
+  $last = ''
+  for ($i = 0; $i -lt 16; $i++) {
+    Start-Sleep -Milliseconds 250
+    $win = Find-Fanal
+    if (-not $win) { continue }
+    $key = "$($win.W)x$($win.H)"
+    $fits = ($wantW -lt 0 -or [Math]::Abs($win.W - $wantW) -le 40) -and $win.W -ge $minW -and $win.W -le $maxW
+    if ($key -eq $last -and $fits) { $stable = $win; break }
+    $last = $key
+  }
+  if (-not $stable) { $stable = Find-Fanal }
+  return $stable
+}
+
 [void][FanalWin]::SetCursorPos(20, 700)
-Start-Sleep -Milliseconds 1000
-$away = Find-Fanal
+$away = Wait-Settled -1 120 220
 if (-not $away) { Write-Output "AWAY: no window"; exit 1 }
 Write-Output "AWAY: $($away.Title) $($away.W)x$($away.H) @ $($away.Left),$($away.Top)"
 if ($IdleShot) { Save-Win ([IntPtr]$away.Hwnd) $IdleShot }
 
-$hx = $away.Left + [Math]::Max(10, [int]($away.W / 2))
-$hy = $away.Top + [Math]::Min(8, [Math]::Max(2, [int]($away.H / 2)))
+$hx = $away.Left + [Math]::Max(8, [int]($away.W / 2))
+$hy = $away.Top + [Math]::Max(4, [int]($away.H / 2))
 [void][FanalWin]::SetCursorPos($hx, $hy)
-Start-Sleep -Milliseconds 800
-$over = Find-Fanal
+$over = Wait-Settled 498 400 600
 Write-Output "OVER: $($over.Title) $($over.W)x$($over.H) @ $($over.Left),$($over.Top)"
 if ($HoverShot) { Save-Win ([IntPtr]$over.Hwnd) $HoverShot }
+
+if ($Settings -and $over) {
+  $gx = $over.Left + $over.W - 36
+  $gy = $over.Top + $over.H - 28
+  [void][FanalWin]::SetCursorPos($gx, $gy)
+  Start-Sleep -Milliseconds 150
+  [FanalWin]::mouse_event([FanalWin]::MouseLeftDown, 0, 0, 0, [System.UIntPtr]::Zero)
+  [FanalWin]::mouse_event([FanalWin]::MouseLeftUp, 0, 0, 0, [System.UIntPtr]::Zero)
+  $page = Wait-Settled 498 400 600
+  Write-Output "SETTINGS: $($page.Title) $($page.W)x$($page.H)"
+  if ($page) { Save-Win ([IntPtr]$page.Hwnd) 'shot-settings.png' }
+}
 
 [void][FanalWin]::SetCursorPos($cur.X, $cur.Y)
 Write-Output "cursor restored"
