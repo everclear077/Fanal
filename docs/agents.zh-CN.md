@@ -19,11 +19,11 @@ Fanal 用两件事决定一盏灯的颜色：这个 Agent 的进程是不是在�
 
 ## 三种读法
 
-只有三个 Agent 的会话格式是拿真实文件核过的。其余的只看进程，而进程只能说明窗口开着，别的什么都说不了。只靠进程点亮的是黄灯，没有详情一行，这是对“窗口开着”这件事最诚实的说法。
+有五个 Agent 的会话格式是拿真实文件核过的。其余的只看进程，而进程只能说明窗口开着，别的什么都说不了。只靠进程点亮的是黄灯，没有详情一行，这是对“窗口开着”这件事最诚实的说法。
 
-### Claude Code
+### Claude Code 和 Claude Desktop
 
-`%USERPROFILE%\.claude\sessions\<pid>.json`，每个正在运行的进程一份。同时有多个时，确认优先于正在执行的任务，正在执行的任务优先于空闲。只有 `status` 决定灯的颜色。
+两边都写 `%USERPROFILE%\.claude\sessions\<pid>.json`。桌面端放在 `%LOCALAPPDATA%\Claude-3p\local-agent-mode-sessions\<账号>\<配置>\.claude\sessions`，每个配置各有一份，全部读取。较新的目录可以是空的，同时较旧的目录里还有任务在跑。每个正在运行的进程一份。同时有多个时，确认优先于正在执行的任务，正在执行的任务优先于空闲。只有 `status` 决定灯的颜色。
 
 | `status` | 读数 |
 | --- | --- |
@@ -45,6 +45,10 @@ Codex 的审批策略是整个线程记一次，不是每一轮记一次。没�
 
 `%USERPROFILE%\.kimi-code\sessions\**\agents\main\wire.jsonl`，同样只读尾部。`agent.turn.started` 和 `agent.message.appended` 读作工作中，`agent.turn.ended` 读作空闲。
 
+### Kimi
+
+`%APPDATA%\kimi-desktop\kimi-agent\conversation-statuses.json`。每一条只是一个状态词。`running` 读作工作中，全部都是 `completed` 时读作空闲。会话编号不会显示。这份文件里没有“正在等用户”的状态，所以 Kimi 桌面端不会亮红灯。
+
 ## 进程名
 
 比对的是进程镜像名，统一转成小写并去掉 `.exe`。
@@ -52,14 +56,12 @@ Codex 的审批策略是整个线程记一次，不是每一轮记一次。没�
 | Agent | 镜像名 |
 | --- | --- |
 | Claude Code | `claude`，不含应用商店安装的那一份 |
-| Claude Desktop | `WindowsApps\Claude_<版本号>` 安装包里的 `claude` |
+| Claude Desktop | `WindowsApps\Claude_<版本号>` 安装包里的 `claude`，或 `Claude-3p` 目录下的 `claude` |
 | Cursor | `cursor` |
 | DeepSeek Harness | `deepseek harness` |
-| Codex | `codex`、`chatgpt` |
+| Codex | `chatgpt`、`codex` |
 | Kimi | `kimi` |
 | Kimi Code | `kimi code`、`kimi-code` |
-| Orca | `orca` |
-| ChatGPT | `chatgpt` |
 | Gemini | `gemini` |
 | Trae | `trae`、`trae cn`、`trae solo cn` |
 | Kiro | `kiro` |
@@ -68,7 +70,7 @@ Codex 的审批策略是整个线程记一次，不是每一轮记一次。没�
 | OpenCode | `opencode` |
 | Devin | `devin` |
 
-Codex 和 ChatGPT 桌面版用的是同一个镜像名，所以 ChatGPT 在跑时 Codex 的灯也会亮。Codex 的会话文件只在有 `codex` 进程时才读，ChatGPT 自己不会把这盏灯点成绿色。点击一行会把这个进程的窗口调到前台并最大化。程序没在跑时，用 Windows 登记的安装路径把它启动起来。
+Codex 和 ChatGPT 桌面版是同一个程序。`chatgpt` 拥有窗口，`codex` 是它的辅助进程，所以共用 Codex 这一盏灯。点击这一行会把窗口调到前台并最大化。程序没在跑时，用 Windows 登记的安装路径把它启动起来。
 
 ## 故意不读的东西
 

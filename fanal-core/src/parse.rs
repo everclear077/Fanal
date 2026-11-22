@@ -143,6 +143,38 @@ pub fn kimi_activity(text: &str, modified_at_ms: u64) -> Option<SessionReading> 
     })
 }
 
+/// Kimi Desktop writes one status per conversation to
+/// `%APPDATA%\kimi-desktop\kimi-agent\conversation-statuses.json`. The values
+/// are status words. A conversation id is not a name, so nothing else is kept.
+pub fn kimi_desktop_activity(text: &str, modified_at_ms: u64) -> Option<SessionReading> {
+    let value: serde_json::Value = serde_json::from_str(text).ok()?;
+    let statuses = value.as_object()?;
+    let mut running = false;
+    let mut idle = false;
+    for status in statuses.values().filter_map(|status| status.as_str()) {
+        match status {
+            "running" => running = true,
+            "completed" => idle = true,
+            _ => {}
+        }
+    }
+    let activity = if running {
+        Activity::Working {
+            updated_at_ms: modified_at_ms,
+        }
+    } else if idle {
+        Activity::Idle {
+            updated_at_ms: modified_at_ms,
+        }
+    } else {
+        return None;
+    };
+    Some(SessionReading {
+        activity,
+        subject: None,
+    })
+}
+
 /// The last path segment, so a working directory becomes a name rather than a
 /// full path in the panel.
 fn leaf(path: &str) -> Option<String> {
@@ -219,5 +251,24 @@ mod tests {
             kimi_activity(idle, 300).unwrap().activity,
             Activity::Idle { updated_at_ms: 300 }
         );
+    }
+
+    #[test]
+    fn kimi_desktop_running_wins_over_completed_and_keeps_no_subject() {
+        let text = r#"{"agent:one":"completed","agent:two":"running"}"#;
+        let reading = kimi_desktop_activity(text, 400).unwrap();
+        assert_eq!(reading.activity, Activity::Working { updated_at_ms: 400 });
+        assert!(reading.subject.is_none());
+    }
+
+    #[test]
+    fn kimi_desktop_with_only_finished_conversations_is_idle() {
+        let text = r#"{"agent:one":"completed"}"#;
+        assert_eq!(
+            kimi_desktop_activity(text, 400).unwrap().activity,
+            Activity::Idle { updated_at_ms: 400 }
+        );
+        assert!(kimi_desktop_activity("{}", 400).is_none());
+        assert!(kimi_desktop_activity(r#"{"agent:one":"elsewhere"}"#, 400).is_none());
     }
 }

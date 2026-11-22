@@ -20,10 +20,12 @@ pub fn builtin_catalog() -> Vec<AgentProfile> {
         },
         // The desktop app ships the same image name as the CLI. The collector
         // tells them apart by where the executable lives.
+        // The desktop app writes the same per-process session file as the CLI,
+        // under its own data directory rather than the user's home.
         AgentProfile {
             id: AgentId::ClaudeDesktop,
             processes: &["claude"],
-            session: false,
+            session: true,
         },
         AgentProfile {
             id: AgentId::Cursor,
@@ -35,33 +37,25 @@ pub fn builtin_catalog() -> Vec<AgentProfile> {
             processes: &["deepseek harness"],
             session: false,
         },
-        // `chatgpt` is the desktop app, which ships the same image name. A
-        // running ChatGPT lights this lamp. The session file and the program
-        // Fanal launches still belong to `codex` only.
+        // The desktop app is one program with two image names: `chatgpt` owns
+        // the window, `codex` is its helper. The window name comes first, so
+        // opening the row finds the window rather than the helper.
         AgentProfile {
             id: AgentId::Codex,
-            processes: &["codex", "chatgpt"],
+            processes: &["chatgpt", "codex"],
             session: true,
         },
+        // The desktop app records each conversation's status. `running` is a
+        // task; `completed` is an open client with nothing executing.
         AgentProfile {
             id: AgentId::Kimi,
             processes: &["kimi"],
-            session: false,
+            session: true,
         },
         AgentProfile {
             id: AgentId::KimiCode,
             processes: &["kimi code", "kimi-code"],
             session: true,
-        },
-        AgentProfile {
-            id: AgentId::Orca,
-            processes: &["orca"],
-            session: false,
-        },
-        AgentProfile {
-            id: AgentId::ChatGpt,
-            processes: &["chatgpt"],
-            session: false,
         },
         AgentProfile {
             id: AgentId::Gemini,
@@ -147,8 +141,9 @@ pub struct Settings {
     pub language: Language,
     /// Grow the lip on its own when something needs the user.
     pub alert_on_attention: bool,
-    /// Also raise a Windows notification when a task opens a confirmation.
-    pub notify_on_amber: bool,
+    /// Unknown ids are dropped. A file that still names an agent this version
+    /// no longer watches, such as one removed from the catalog, still loads.
+    #[serde(deserialize_with = "deserialize_agents")]
     pub agents: Vec<AgentConfig>,
 }
 
@@ -158,7 +153,6 @@ impl Default for Settings {
             theme: Theme::Dark,
             language: Language::System,
             alert_on_attention: true,
-            notify_on_amber: true,
             agents: AgentId::ALL
                 .into_iter()
                 .map(|id| AgentConfig { id, enabled: true })
@@ -190,4 +184,26 @@ impl Settings {
             .collect();
         self.agents = known;
     }
+}
+
+fn deserialize_agents<'de, D>(deserializer: D) -> Result<Vec<AgentConfig>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    struct Entry {
+        id: String,
+        #[serde(default)]
+        enabled: bool,
+    }
+
+    Ok(Vec::<Entry>::deserialize(deserializer)?
+        .into_iter()
+        .filter_map(|entry| {
+            AgentId::from_key(&entry.id).map(|id| AgentConfig {
+                id,
+                enabled: entry.enabled,
+            })
+        })
+        .collect())
 }

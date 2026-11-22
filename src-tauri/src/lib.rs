@@ -11,7 +11,6 @@ use std::time::Duration;
 use tauri::image::Image;
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{Manager, State, WebviewWindow};
-use tauri_plugin_notification::NotificationExt;
 
 struct AppState {
     collector: Mutex<Collector>,
@@ -60,16 +59,15 @@ fn save_settings(state: State<AppState>, settings: Settings) -> Result<(), Strin
 fn open_agent(id: AgentId) -> Result<(), String> {
     #[cfg(windows)]
     {
-        if let Some(pid) = collect::running_pid(id) {
-            if windowing::focus(pid) {
-                return Ok(());
-            }
+        let pids = collect::running_pids(id);
+        if windowing::focus(&pids) {
+            return Ok(());
         }
         // Not running, or running without a window: start it, then focus.
         if let Some(path) = collect::executable_for(id) {
             if let Some(new_pid) = windowing::launch(&path) {
                 std::thread::sleep(std::time::Duration::from_millis(900));
-                windowing::focus(new_pid);
+                windowing::focus(&[new_pid]);
                 return Ok(());
             }
         }
@@ -118,30 +116,9 @@ fn tooltip_for(board: &Board) -> String {
     }
 }
 
-/// Raise a toast for every agent that was not amber on the previous pass.
-fn announce(app: &tauri::AppHandle, current: &Board, previous: &[AgentId]) {
-    if !current.settings.notify_on_amber {
-        return;
-    }
-    for agent in &current.agents {
-        if agent.lamp == Lamp::Red && !previous.contains(&agent.id) {
-            let _ = app
-                .notification()
-                .builder()
-                .title(agent.id.display_name())
-                .body("Needs you")
-                .show();
-        }
-    }
-}
-
 fn watch(app: tauri::AppHandle, tray: TrayIcon) {
     std::thread::spawn(move || {
         let mut shown = None;
-        // Seeded from the first reading, so a confirmation that was already up
-        // when Fanal started does not raise a toast on every launch.
-        let mut waiting: Vec<AgentId> = Vec::new();
-        let mut primed = false;
         loop {
             let current = board(app.state::<AppState>().inner());
             if shown != Some(current.severity.lamp) {
@@ -149,16 +126,6 @@ fn watch(app: tauri::AppHandle, tray: TrayIcon) {
                 let _ = tray.set_icon(Some(lamp_icon(current.severity.lamp)));
                 let _ = tray.set_tooltip(Some(tooltip_for(&current)));
             }
-            if primed {
-                announce(&app, &current, &waiting);
-            }
-            primed = true;
-            waiting = current
-                .agents
-                .iter()
-                .filter(|agent| agent.lamp == Lamp::Red)
-                .map(|agent| agent.id)
-                .collect();
             std::thread::sleep(Duration::from_secs(2));
         }
     });
@@ -178,13 +145,11 @@ fn place(window: &WebviewWindow, width: f64) {
 
 #[tauri::command]
 fn fit_panel(window: WebviewWindow, width: f64, height: f64) {
-    // The lip is only 11px tall. A pointer that arrives on it would leave the
-    // window the moment the panel starts to open, so the hit area stays tall
-    // enough to contain the hand that opened it. The painted panel is the
-    // content height; the extra is transparent.
-    let hit = height.max(48.0);
+    // The window is exactly the painted panel. A taller transparent window sits
+    // on top of whatever is underneath, so a collapsed lip used to cover the
+    // browser tabs below it.
     place(&window, width);
-    let _ = window.set_size(tauri::LogicalSize::new(width, hit));
+    let _ = window.set_size(tauri::LogicalSize::new(width, height.max(11.0)));
 }
 
 pub fn run() {
@@ -198,7 +163,6 @@ pub fn run() {
     };
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_notification::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             snapshot,
@@ -216,12 +180,26 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("fanal failed to start")
-        .run(|app, event| {
-            if let tauri::RunEvent::Ready = event
-                && let Some(window) = app.get_webview_window("main")
-            {
-                place(&window, 132.0);
-                let _ = window.show();
+        .run(|app, event| match event {
+            tauri::RunEvent::Ready => {
+                if let Some(window) = app.get_webview_window("main") {
+                    place(&window, 132.0);
+                    let _ = window.show();
+                }
             }
+            tauri::RunEvent::WindowEvent {
+                event: tauri::WindowEvent::Focused(focused),
+                ..
+            } => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let script = if focused {
+                        "window.__fanalFocus && window.__fanalFocus(true)"
+                    } else {
+                        "window.__fanalFocus && window.__fanalFocus(false)"
+                    };
+                    let _ = window.eval(script);
+                }
+            }
+            _ => {}
         });
 }

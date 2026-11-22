@@ -4,7 +4,7 @@
 
 [English](README.md)
 
-平时它只是一小条黑色的边。某个 Agent 需要你，或者一个正在跑的任务停了下来，它会自己弹开；鼠标放上去时它会完全展开。鼠标短暂离开不会让它收回去。点击一行，会把那个 Agent 自己的窗口调到前台并最大化。Fanal 不会替你回答任何提示。
+平时它只是一小条黑色的边，窗口也只有这一条那么高，不会挡住下面的浏览器标签。某个 Agent 需要你，或者一个正在跑的任务停了下来，它会自己弹开；鼠标放上去时它会完全展开。鼠标一离开就收回，点到别的地方也会收回。点击一行，会把那个 Agent 自己的窗口调到前台并最大化。Fanal 不会替你回答任何提示。
 
 ![面板展开，Codex 在等待，Claude Code 在工作](docs/images/panel.png)
 
@@ -15,7 +15,7 @@
 
 ## 设置
 
-面板底部的齿轮打开设置：监视哪些 Agent、刘海要不要自己弹开、弹出确认框时要不要发一条 Windows 通知，以及语言和主题。设置保存在 `%APPDATA%\Fanal\settings.json`，这是 Fanal 自己的目录，不是任何一个 Agent 的。
+面板底部的齿轮打开设置：监视哪些 Agent、刘海要不要自己弹开，以及语言和主题。设置保存在 `%APPDATA%\Fanal\settings.json`，这是 Fanal 自己的目录，不是任何一个 Agent 的。
 
 ![设置](docs/images/settings.png)
 
@@ -23,9 +23,9 @@
 
 ## 它监视哪些
 
-Claude Code、Claude Desktop、Cursor、DeepSeek Harness、Codex、Kimi、Kimi Code、Orca、ChatGPT、Gemini、Trae、Kiro、Qoder、Antigravity、OpenCode 和 Devin。
+Claude Code、Claude Desktop、Cursor、DeepSeek Harness、Codex、Kimi、Kimi Code、Gemini、Trae、Kiro、Qoder、Antigravity、OpenCode 和 Devin。Codex 和 ChatGPT 桌面版是同一个程序，共用一盏灯。
 
-每个 Agent 都从进程判断。Claude Code、Codex 和 Kimi Code 另外有一份拿真实文件核过格式的会话文件，所以这三个能说出自己在做什么，而不只是在不在跑。细节，包括 Fanal 拒绝从会话文件里读什么，写在 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)。
+每个 Agent 都从进程判断。Claude Code、Claude Desktop、Codex、Kimi 和 Kimi Code 另外有一份拿真实文件核过格式的会话文件，所以这五个能说出自己在做什么，而不只是在不在跑。细节，包括 Fanal 拒绝从会话文件里读什么，写在 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)。
 
 ## 构建
 
@@ -44,7 +44,7 @@ cargo build --manifest-path src-tauri/Cargo.toml
 
 ```
 fanal-core/     灯的判断和会话解析，以及对应的测试
-src-tauri/      桌面应用：进程扫描、窗口聚焦、托盘、通知
+src-tauri/      桌面应用：进程扫描、窗口聚焦、托盘
 ui/             面板：一个页面、一份样式、一段脚本
 docs/           检测方式的说明，以及上面这些截图
 ```

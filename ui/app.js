@@ -15,8 +15,6 @@ const NAMES = {
   codex: "Codex",
   kimi: "Kimi",
   "kimi-code": "Kimi Code",
-  orca: "Orca",
-  chatgpt: "ChatGPT",
   gemini: "Gemini",
   trae: "Trae",
   kiro: "Kiro",
@@ -38,7 +36,6 @@ const COPY = {
     zh: "Chinese",
     notch: "Notch",
     alert: "Open when something needs you",
-    notify: "Notify when a task needs you",
     connected: "Agents",
     done: "Done",
     open: "Open",
@@ -55,7 +52,6 @@ const COPY = {
     zh: "中文",
     notch: "刘海",
     alert: "有情况才弹出来",
-    notify: "需要确认时发系统通知",
     connected: "接入的 Agent",
     done: "完成",
     open: "打开",
@@ -227,16 +223,28 @@ function panelWidth() {
   return Math.min(HOVER_WIDTH, Math.max(132, 24 + pops.length * 52));
 }
 
-// The window is resized from the content, so the measurement has to happen
-// after the browser has laid the new rows out. Measuring inside the same
-// turn that built them reports the previous frame's height.
+// Measure at the width the window is about to become. Measuring at the lip's
+// width wraps every row, the page grows a scrollbar, and the window then
+// changes size again. The card stays hidden until that resize has landed.
 let fitFrame = 0;
 function fit() {
   const frame = ++fitFrame;
+  const width = panelWidth();
+  const entering = panel.dataset.seenView !== panel.dataset.view;
+  if (entering) delete panel.dataset.settled;
   requestAnimationFrame(() => {
     if (frame !== fitFrame) return;
-    const height = Math.ceil(panel.getBoundingClientRect().height);
-    invoke("fit_panel", { width: panelWidth(), height: Math.max(height, 11), note: "" });
+    panel.style.width = width + "px";
+    const height = Math.max(11, Math.ceil(panel.offsetHeight));
+    panel.style.width = "";
+    const key = width + "x" + height;
+    if (!entering && panel.dataset.fit === key && panel.dataset.settled === "1") return;
+    panel.dataset.fit = key;
+    invoke("fit_panel", { width, height, note: "" }).then(() => {
+      if (frame !== fitFrame) return;
+      panel.dataset.seenView = panel.dataset.view;
+      panel.dataset.settled = "1";
+    });
   });
 }
 
@@ -265,7 +273,6 @@ function renderSettings() {
     board.settings.theme = value;
   });
   document.getElementById("alert").checked = board.settings.alert_on_attention;
-  document.getElementById("notify").checked = board.settings.notify_on_amber;
 
   grid.replaceChildren();
   board.settings.agents.forEach((agent) => {
@@ -305,7 +312,6 @@ function chosen(box) {
 
 function applyForm() {
   board.settings.alert_on_attention = document.getElementById("alert").checked;
-  board.settings.notify_on_amber = document.getElementById("notify").checked;
   const language = chosen(languageBox);
   const theme = chosen(themeBox);
   if (language) board.settings.language = language;
@@ -337,13 +343,35 @@ panel.addEventListener("pointerenter", () => {
   justStopped.clear();
   render();
 });
+function collapse() {
+  clearTimeout(leaveTimer);
+  hover = false;
+  const discard = panel.dataset.page === "settings";
+  panel.dataset.page = "agents";
+  if (discard) refresh();
+  else render();
+}
+
 panel.addEventListener("pointerleave", () => {
   clearTimeout(leaveTimer);
-  leaveTimer = setTimeout(() => {
-    hover = false;
-    if (panel.dataset.page !== "settings") render();
-  }, 400);
+  // The window is exactly as tall as the panel, so the moment the pointer
+  // leaves it is already over whatever sits underneath. Waiting here keeps
+  // that window on top of the browser tab the pointer just reached.
+  collapse();
 });
+
+// Clicking another window does not move the pointer out of this one when the
+// cursor was resting on it, so focus loss closes it too.
+window.__fanalFocus = (focused) => {
+  if (focused) {
+    clearTimeout(leaveTimer);
+    return;
+  }
+  clearTimeout(leaveTimer);
+  leaveTimer = setTimeout(() => {
+    if (!document.hasFocus()) collapse();
+  }, 80);
+};
 
 window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", render);
 

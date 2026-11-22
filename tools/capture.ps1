@@ -71,9 +71,9 @@ Write-Output "AWAY: $($away.Title) $($away.W)x$($away.H) @ $($away.Left),$($away
 if ($IdleShot) { Save-Win ([IntPtr]$away.Hwnd) $IdleShot }
 
 $hx = $away.Left + [Math]::Max(8, [int]($away.W / 2))
-$hy = $away.Top + [Math]::Max(4, [int]($away.H / 2))
+$hy = $away.Top + 6
 [void][FanalWin]::SetCursorPos($hx, $hy)
-$over = Wait-Settled 498 400 600
+$over = Wait-Settled 498 400 700
 Write-Output "OVER: $($over.Title) $($over.W)x$($over.H) @ $($over.Left),$($over.Top)"
 if ($HoverShot) { Save-Win ([IntPtr]$over.Hwnd) $HoverShot }
 
@@ -84,7 +84,7 @@ if ($Settings -and $over) {
   Start-Sleep -Milliseconds 150
   [FanalWin]::mouse_event([FanalWin]::MouseLeftDown, 0, 0, 0, [System.UIntPtr]::Zero)
   [FanalWin]::mouse_event([FanalWin]::MouseLeftUp, 0, 0, 0, [System.UIntPtr]::Zero)
-  $page = Wait-Settled 498 400 600
+  $page = Wait-Settled 498 400 900
   Write-Output "SETTINGS: $($page.Title) $($page.W)x$($page.H)"
   if ($page) { Save-Win ([IntPtr]$page.Hwnd) 'shot-settings.png' }
 }

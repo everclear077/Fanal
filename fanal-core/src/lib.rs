@@ -11,5 +11,5 @@ mod settings;
 
 pub use detect::{classify, Activity, Evidence, Observation};
 pub use model::{AgentId, AgentSnapshot, Lamp, Severity};
-pub use parse::{claude_status, codex_activity, kimi_activity, SessionReading};
+pub use parse::{claude_status, codex_activity, kimi_activity, kimi_desktop_activity, SessionReading};
 pub use settings::{builtin_catalog, AgentConfig, AgentProfile, Language, Settings, Theme};

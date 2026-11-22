@@ -18,10 +18,6 @@ pub enum AgentId {
     Kimi,
     #[serde(rename = "kimi-code")]
     KimiCode,
-    #[serde(rename = "orca")]
-    Orca,
-    #[serde(rename = "chatgpt")]
-    ChatGpt,
     #[serde(rename = "gemini")]
     Gemini,
     #[serde(rename = "trae")]
@@ -39,7 +35,7 @@ pub enum AgentId {
 }
 
 impl AgentId {
-    pub const ALL: [AgentId; 16] = [
+    pub const ALL: [AgentId; 14] = [
         AgentId::ClaudeCode,
         AgentId::ClaudeDesktop,
         AgentId::Cursor,
@@ -47,8 +43,6 @@ impl AgentId {
         AgentId::Codex,
         AgentId::Kimi,
         AgentId::KimiCode,
-        AgentId::Orca,
-        AgentId::ChatGpt,
         AgentId::Gemini,
         AgentId::Trae,
         AgentId::Kiro,
@@ -62,6 +56,12 @@ impl AgentId {
         self.profile().1
     }
 
+    /// The id stored in settings. An id this version does not know is `None`,
+    /// so a file written by a newer or older build does not fail to load.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|id| id.as_str() == key)
+    }
+
     /// The name shown to a person, matching the catalog.
     pub fn display_name(self) -> &'static str {
         self.profile().0
@@ -73,11 +73,9 @@ impl AgentId {
             AgentId::ClaudeDesktop => ("Claude Desktop", "claude-desktop"),
             AgentId::Cursor => ("Cursor", "cursor"),
             AgentId::DeepseekHarness => ("DeepSeek Harness", "deepseek-harness"),
-            AgentId::Codex => ("Codex", "codex"),
+            AgentId::Codex => ("Codex", "codex"), // the ChatGPT desktop app
             AgentId::Kimi => ("Kimi", "kimi"),
             AgentId::KimiCode => ("Kimi Code", "kimi-code"),
-            AgentId::Orca => ("Orca", "orca"),
-            AgentId::ChatGpt => ("ChatGPT", "chatgpt"),
             AgentId::Gemini => ("Gemini", "gemini"),
             AgentId::Trae => ("Trae", "trae"),
             AgentId::Kiro => ("Kiro", "kiro"),

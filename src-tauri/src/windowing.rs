@@ -14,7 +14,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 
 struct Search {
-    wanted: u32,
+    wanted: Vec<u32>,
     found: HWND,
 }
 
@@ -26,7 +26,7 @@ unsafe extern "system" fn visit(hwnd: HWND, param: LPARAM) -> i32 {
         }
         let mut owner = 0u32;
         GetWindowThreadProcessId(hwnd, &mut owner);
-        if owner == search.wanted {
+        if search.wanted.contains(&owner) {
             search.found = hwnd;
             return 0;
         }
@@ -34,9 +34,9 @@ unsafe extern "system" fn visit(hwnd: HWND, param: LPARAM) -> i32 {
     }
 }
 
-fn window_for(pid: u32) -> Option<HWND> {
+fn window_for(pids: &[u32]) -> Option<HWND> {
     let mut search = Search {
-        wanted: pid,
+        wanted: pids.to_vec(),
         found: std::ptr::null_mut(),
     };
     unsafe {
@@ -49,9 +49,10 @@ fn window_for(pid: u32) -> Option<HWND> {
     }
 }
 
-/// Maximise and focus the window belonging to `pid`.
-pub fn focus(pid: u32) -> bool {
-    let Some(hwnd) = window_for(pid) else {
+/// Maximise and focus the window belonging to one of these processes. A helper
+/// process shares the agent's name and has no window of its own.
+pub fn focus(pids: &[u32]) -> bool {
+    let Some(hwnd) = window_for(pids) else {
         return false;
     };
     unsafe {

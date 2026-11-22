@@ -307,4 +307,27 @@ mod tests {
         assert!(settings.enabled(AgentId::ClaudeCode));
         assert_eq!(settings.agents.len(), AgentId::ALL.len());
     }
+
+    #[test]
+    fn a_removed_agent_and_an_old_switch_do_not_reset_the_file() {
+        let text = r#"{
+            "theme": "dark",
+            "alert_on_attention": false,
+            "notify_on_amber": true,
+            "agents": [
+                {"id": "claude-code", "enabled": true},
+                {"id": "orca", "enabled": true},
+                {"id": "cursor", "enabled": false}
+            ]
+        }"#;
+        let mut settings: Settings = serde_json::from_str(text).unwrap();
+        assert!(settings.enabled(AgentId::ClaudeCode));
+        assert!(!settings.enabled(AgentId::Cursor));
+        assert!(!settings.alert_on_attention);
+        settings.reconcile();
+        assert_eq!(settings.agents.len(), AgentId::ALL.len());
+        assert!(settings.enabled(AgentId::ClaudeCode));
+        assert!(!settings.enabled(AgentId::Cursor));
+        assert!(!settings.enabled(AgentId::Kimi));
+    }
 }

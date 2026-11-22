@@ -1,8 +1,9 @@
 //! Turns the local machine into the observations the core can judge.
 //!
 //! Process detection covers every catalog entry. Session files are only read
-//! for the agents whose format was verified: Claude Code, Codex, and Kimi Code.
-//! An agent with nothing but a process still gets a lamp; it is just a quieter one.
+//! for the agents whose format was verified: Claude Code, Claude Desktop, Codex,
+//! Kimi, and Kimi Code. An agent with nothing but a process still gets a lamp;
+//! it is just a quieter one.
 
 use fanal_core::{builtin_catalog, Activity, Observation, SessionReading};
 use std::fs;
@@ -299,15 +300,17 @@ fn running_exes(system: &System) -> Vec<LiveProcess> {
 }
 
 /// Claude Code and Claude Desktop share the image name `claude`. The desktop
-/// app is the Store package `WindowsApps\Claude_<version>_...`; the CLI is
-/// everything else under that name. A directory that merely contains the word
-/// is not the package.
+/// app is either the Store package `WindowsApps\Claude_<version>_...` or the
+/// runtime it keeps under `Claude-3p`. The CLI is everything else under that
+/// name. A directory that merely contains the word is not the package.
 pub fn belongs_to(id: fanal_core::AgentId, exe: &str) -> bool {
     use fanal_core::AgentId;
-    let desktop = exe.split(['\\', '/']).any(|part| {
-        let part = part.to_ascii_lowercase();
-        part.starts_with("claude_") && part.contains('_')
-    });
+    let parts: Vec<String> = exe
+        .split(['\\', '/'])
+        .map(|part| part.to_ascii_lowercase())
+        .collect();
+    let desktop = parts.iter().any(|part| part.starts_with("claude_") && part.contains('_'))
+        || parts.iter().any(|part| part == "claude-3p");
     match id {
         AgentId::ClaudeDesktop => desktop,
         AgentId::ClaudeCode => !desktop,
@@ -326,23 +329,24 @@ fn session_owner(id: fanal_core::AgentId, process: &LiveProcess) -> bool {
     }
 }
 
-/// The pid of a live window for this agent, if one is running.
-pub fn running_pid(id: fanal_core::AgentId) -> Option<u32> {
+/// Every live process of this agent. The window may belong to a later one:
+/// Codex's window is `chatgpt`, while `codex` itself is a helper.
+pub fn running_pids(id: fanal_core::AgentId) -> Vec<u32> {
     let mut system = System::new();
     system.refresh_processes(ProcessesToUpdate::All, true);
     let wanted = process_names(id);
-    system.processes().values().find_map(|process| {
+    let mut found = Vec::new();
+    for process in system.processes().values() {
         let name = process_name(process);
         let exe = process
             .exe()
             .map(|path| path.to_string_lossy().to_ascii_lowercase())
             .unwrap_or_default();
         if wanted.contains(&name.as_str()) && belongs_to(id, &exe) {
-            Some(process.pid().as_u32())
-        } else {
-            None
+            found.push(process.pid().as_u32());
         }
-    })
+    }
+    found
 }
 
 fn process_names(id: fanal_core::AgentId) -> &'static [&'static str] {
@@ -356,11 +360,13 @@ fn process_names(id: fanal_core::AgentId) -> &'static [&'static str] {
 fn session_reading(id: fanal_core::AgentId, home: &Path, live: &[&LiveProcess]) -> Option<SessionReading> {
     use fanal_core::AgentId;
     match id {
-        AgentId::ClaudeCode => claude_reading(&home.join(".claude").join("sessions"), live),
+        AgentId::ClaudeCode => claude_reading(&[home.join(".claude").join("sessions")], live),
+        AgentId::ClaudeDesktop => claude_reading(&claude_desktop_sessions(), live),
         AgentId::Codex => file_reading(&home.join(".codex").join("sessions"), live, 4, codex_file, fanal_core::codex_activity),
         AgentId::KimiCode => {
             file_reading(&home.join(".kimi-code").join("sessions"), live, 6, kimi_file, fanal_core::kimi_activity)
         }
+        AgentId::Kimi => kimi_desktop_reading(live),
         _ => None,
     }
 }
@@ -371,6 +377,52 @@ fn codex_file(path: &Path) -> bool {
 
 fn kimi_file(path: &Path) -> bool {
     path.file_name().and_then(|name| name.to_str()) == Some("wire.jsonl")
+}
+
+/// Claude Desktop keeps one session directory per conversation. A new one is
+/// created when a task starts, so the newest directory can be empty while an
+/// older one still has a task running. Every directory is read.
+fn claude_desktop_sessions() -> Vec<PathBuf> {
+    let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) else {
+        return Vec::new();
+    };
+    let root = local.join("Claude-3p").join("local-agent-mode-sessions");
+    let mut sessions = Vec::new();
+    collect_named(&root, "sessions", 5, &mut sessions);
+    sessions.into_iter().map(|(_, path)| path).collect()
+}
+
+fn collect_named(dir: &Path, wanted: &str, depth: usize, found: &mut Vec<(u64, PathBuf)>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        if path.file_name().and_then(|name| name.to_str()) == Some(wanted) {
+            found.push((modified_ms(&path), path));
+            continue;
+        }
+        if depth > 0 {
+            collect_named(&path, wanted, depth - 1, found);
+        }
+    }
+}
+
+/// Kimi Desktop keeps one status word per conversation. Only that word is read.
+fn kimi_desktop_reading(live: &[&LiveProcess]) -> Option<SessionReading> {
+    let path = std::env::var_os("APPDATA")
+        .map(PathBuf::from)?
+        .join("kimi-desktop")
+        .join("kimi-agent")
+        .join("conversation-statuses.json");
+    if !current_file(&path, live) {
+        return None;
+    }
+    let text = fs::read_to_string(&path).ok()?;
+    fanal_core::kimi_desktop_activity(&text, modified_ms(&path))
 }
 
 /// A file belongs to this run when it was written after one of these processes
@@ -386,28 +438,34 @@ fn current_file(path: &Path, live: &[&LiveProcess]) -> bool {
 /// One colour for every live Claude Code process. A confirmation outranks a
 /// running task, which outranks an idle session. The status stands until the
 /// file changes: a long task does not rewrite it every minute.
-fn claude_reading(dir: &Path, live: &[&LiveProcess]) -> Option<SessionReading> {
+fn claude_reading(dirs: &[PathBuf], live: &[&LiveProcess]) -> Option<SessionReading> {
     use fanal_core::Activity;
     let mut best: Option<(u8, u64, SessionReading)> = None;
-    for process in live {
-        let path = dir.join(format!("{}.json", process.pid));
-        if !current_file(&path, &[process]) {
-            continue;
-        }
-        let Ok(text) = fs::read_to_string(&path) else {
-            continue;
-        };
-        let Some(reading) = fanal_core::claude_status(&text, modified_ms(&path)) else {
-            continue;
-        };
-        let rank = match reading.activity {
-            Activity::NeedsConfirmation { .. } => 2,
-            Activity::Working { .. } => 1,
-            Activity::Idle { .. } => 0,
-        };
-        let newer = best.as_ref().map(|(best_rank, at, _)| rank > *best_rank || (rank == *best_rank && modified_ms(&path) > *at)).unwrap_or(true);
-        if newer {
-            best = Some((rank, modified_ms(&path), reading));
+    for dir in dirs {
+        for process in live {
+            let path = dir.join(format!("{}.json", process.pid));
+            if !current_file(&path, &[process]) {
+                continue;
+            }
+            let Ok(text) = fs::read_to_string(&path) else {
+                continue;
+            };
+            let Some(reading) = fanal_core::claude_status(&text, modified_ms(&path)) else {
+                continue;
+            };
+            let rank = match reading.activity {
+                Activity::NeedsConfirmation { .. } => 2,
+                Activity::Working { .. } => 1,
+                Activity::Idle { .. } => 0,
+            };
+            let at = modified_ms(&path);
+            let newer = best
+                .as_ref()
+                .map(|(best_rank, best_at, _)| rank > *best_rank || (rank == *best_rank && at > *best_at))
+                .unwrap_or(true);
+            if newer {
+                best = Some((rank, at, reading));
+            }
         }
     }
     best.map(|(_, _, reading)| reading)
@@ -522,23 +580,18 @@ pub fn executable_for(id: fanal_core::AgentId) -> Option<PathBuf> {
     let wanted = process_names(id);
     let mut system = System::new();
     system.refresh_processes(ProcessesToUpdate::All, true);
-    let running = system.processes().values().find_map(|process| {
-        let name = process_name(process);
-        let exe = process.exe().map(PathBuf::from)?;
-        let path = exe.to_string_lossy().to_ascii_lowercase();
-        if !wanted.iter().any(|item| *item == name) || !belongs_to(id, &path) {
-            return None;
-        }
-        let owned = session_owner(
-            id,
-            &LiveProcess {
-                name,
-                exe: path,
-                pid: process.pid().as_u32(),
-                started_ms: 0,
-            },
-        );
-        if owned { Some(exe) } else { None }
+    // The first matching image name owns the window. A later one, such as
+    // Codex's helper, is only a fallback for launching.
+    let running = wanted.iter().find_map(|wanted_name| {
+        system.processes().values().find_map(|process| {
+            let name = process_name(process);
+            if name != *wanted_name {
+                return None;
+            }
+            let exe = process.exe().map(PathBuf::from)?;
+            let path = exe.to_string_lossy().to_ascii_lowercase();
+            if belongs_to(id, &path) { Some(exe) } else { None }
+        })
     });
     if running.is_some() {
         return running;
@@ -596,13 +649,66 @@ mod tests {
     #[test]
     fn the_store_package_is_claude_desktop_and_a_folder_named_claude_is_not() {
         let store = r"c:\program files\windowsapps\claude_1.0.0_x64__publisher\app\claude.exe";
+        let runtime = r"c:\users\me\appdata\local\claude-3p\claude-code\1.0.0\build\claude.exe";
         let folder = r"c:\users\me\windowsapps\claude\claude.exe";
         let cli = r"c:\users\me\.local\bin\claude.exe";
         assert!(belongs_to(AgentId::ClaudeDesktop, store));
+        assert!(belongs_to(AgentId::ClaudeDesktop, runtime));
         assert!(!belongs_to(AgentId::ClaudeCode, store));
+        assert!(!belongs_to(AgentId::ClaudeCode, runtime));
         assert!(!belongs_to(AgentId::ClaudeDesktop, folder));
         assert!(belongs_to(AgentId::ClaudeCode, folder));
         assert!(belongs_to(AgentId::ClaudeCode, cli));
+    }
+}
+
+#[cfg(test)]
+fn live_process(pid: u32) -> LiveProcess {
+    LiveProcess {
+        name: "claude".to_string(),
+        exe: r"c:\users\me\appdata\local\claude-3p\claude.exe".to_string(),
+        pid,
+        started_ms: 1,
+    }
+}
+
+#[cfg(test)]
+mod session_tests {
+    use super::{claude_reading, live_process};
+    use fanal_core::Activity;
+
+    #[test]
+    fn a_running_session_in_an_older_directory_still_wins() {
+        let root = std::env::temp_dir().join(format!("fanal-claude-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let older = root.join("old-profile").join("sessions");
+        let newer = root.join("new-profile").join("sessions");
+        let empty = root.join("empty-profile").join("sessions");
+        std::fs::create_dir_all(&older).unwrap();
+        std::fs::create_dir_all(&newer).unwrap();
+        std::fs::create_dir_all(&empty).unwrap();
+        std::fs::write(older.join("42.json"), r#"{"status":"busy","cwd":"C:/work/notes"}"#).unwrap();
+        std::fs::write(newer.join("99.json"), r#"{"status":"idle","cwd":"C:/work/finished"}"#).unwrap();
+
+        let running = live_process(42);
+        let idle = live_process(99);
+        // Newest first, and an empty directory in front of that. Neither may hide
+        // the task that is still running in the older directory.
+        let reading = claude_reading(&[empty.clone(), newer.clone(), older.clone()], &[&idle, &running])
+            .expect("a live session");
+        assert!(matches!(reading.activity, Activity::Working { .. }));
+        assert_eq!(reading.subject.as_deref(), Some("notes"));
+
+        std::fs::write(
+            newer.join("7.json"),
+            r#"{"status":"needs_approval","cwd":"C:/work/auth"}"#,
+        )
+        .unwrap();
+        let waiting = live_process(7);
+        let reading = claude_reading(&[empty, newer, older], &[&idle, &running, &waiting]).expect("a confirmation");
+        assert!(matches!(reading.activity, Activity::NeedsConfirmation { .. }));
+        assert_eq!(reading.subject.as_deref(), Some("auth"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 

@@ -19,11 +19,11 @@ Red outranks green, green outranks yellow, and yellow outranks grey. The tray ic
 
 ## Three kinds of reading
 
-Only three agents have a session format that was checked against real files. Every other agent is read from its process, which can say that the window is open and nothing more. A process-only lamp is yellow and carries no detail line, which is the honest version of "the window is open".
+Five agents have a session format that was checked against real files. Every other agent is read from its process, which can say that the window is open and nothing more. A process-only lamp is yellow and carries no detail line, which is the honest version of "the window is open".
 
-### Claude Code
+### Claude Code and Claude Desktop
 
-`%USERPROFILE%\.claude\sessions\<pid>.json`, one file per live process. When several are live, a confirmation outranks a running task, which outranks an idle session. `status` is the only field that decides the lamp.
+Both write `%USERPROFILE%\.claude\sessions\<pid>.json`. The desktop app keeps one directory per profile at `%LOCALAPPDATA%\Claude-3p\local-agent-mode-sessions\<account>\<profile>\.claude\sessions`, and every one of them is read. A newer directory can be empty while an older one still has a task running. One file per live process. When several are live, a confirmation outranks a running task, which outranks an idle session. `status` is the only field that decides the lamp.
 
 | `status` | Reading |
 | --- | --- |
@@ -45,6 +45,10 @@ Codex records its approval policy once, for the whole thread, rather than per tu
 
 `%USERPROFILE%\.kimi-code\sessions\**\agents\main\wire.jsonl`, again read from the tail. `agent.turn.started` and `agent.message.appended` read as working; `agent.turn.ended` reads as idle.
 
+### Kimi
+
+`%APPDATA%\kimi-desktop\kimi-agent\conversation-statuses.json`. Each entry is a status word. `running` reads as working, and a file whose entries are all `completed` reads as idle. The conversation ids are not shown. Nothing in this file says a task is waiting on the user, so the Kimi desktop lamp does not turn red.
+
 ## Process names
 
 A process matches on its image name, compared in lowercase with `.exe` removed.
@@ -52,14 +56,12 @@ A process matches on its image name, compared in lowercase with `.exe` removed.
 | Agent | Image names |
 | --- | --- |
 | Claude Code | `claude`, except the Store package |
-| Claude Desktop | `claude` inside a `WindowsApps\Claude_<version>` package |
+| Claude Desktop | `claude` inside a `WindowsApps\Claude_<version>` package, or under `Claude-3p` |
 | Cursor | `cursor` |
 | DeepSeek Harness | `deepseek harness` |
-| Codex | `codex`, `chatgpt` |
+| Codex | `chatgpt`, `codex` |
 | Kimi | `kimi` |
 | Kimi Code | `kimi code`, `kimi-code` |
-| Orca | `orca` |
-| ChatGPT | `chatgpt` |
 | Gemini | `gemini` |
 | Trae | `trae`, `trae cn`, `trae solo cn` |
 | Kiro | `kiro` |
@@ -68,7 +70,7 @@ A process matches on its image name, compared in lowercase with `.exe` removed.
 | OpenCode | `opencode` |
 | Devin | `devin` |
 
-Codex and the ChatGPT desktop app ship under the same image name, so a running ChatGPT app also lights the Codex lamp. The Codex session file is only read while a `codex` process is running, so ChatGPT cannot keep that lamp green on its own. Clicking a row focuses that process's window. A closed program is launched from the path Windows recorded for it.
+The Codex app and the ChatGPT desktop app are one program. `chatgpt` owns the window and `codex` is its helper, so they share the Codex lamp. Clicking the row focuses that window. A closed program is launched from the path Windows recorded for it.
 
 ## What is deliberately not read
 
