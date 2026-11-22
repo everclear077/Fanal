@@ -2,7 +2,7 @@
 name = "fanal-core"
 version = "0.1.0"
 edition = "2021"
-description = "Detection core for Fanal, a local status lamp for desktop coding agents."
+description = "Detection core for Fanal, the system-wide task monitor for desktop coding agents."
 license = "MIT"
 publish = false
 

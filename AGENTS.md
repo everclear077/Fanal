@@ -1,12 +1,12 @@
 # Fanal — Project Rules
 
 > Extends ~/CLAUDE.md. Project rules override global when conflict.
-> A notch on Windows: one lamp per local coding agent.
+> The system-wide task monitor for the coding agents on this machine.
 > `docs/AGENTS.md` explains a lamp. This file explains how to change the repo.
 
 ## What this is
 
-Fanal is a Tauri 2 window plus the pure `fanal-core` crate. Grey means the program is closed, yellow means the client is open and idle, green means a task is executing, and red means a task opened a confirmation. Red outranks green, then yellow, then grey. A closed program is never red.
+Fanal watches every coding agent on the machine from one notch, then decides a lamp. Grey means the program is closed, yellow means the client is open and idle, green means a task is executing, and red means a task opened a confirmation. Red outranks green, then yellow, then grey. A closed program is never red.
 
 ## Session Checklist
 

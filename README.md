@@ -1,10 +1,14 @@
 # Fanal
 
-A notch that sits on the top edge of the screen and shows one lamp for every coding agent on the machine. Grey means the program is not running. Yellow means its client is open and idle. Green means a task is executing. Red means a task has opened a confirmation and is waiting on you. There is no status text. The colour is the whole message.
+Fanal is the system-wide task monitor for the coding agents on this machine.
+
+Each agent keeps its own window. A task may be executing, stopped and waiting for a confirmation, or the program may not be running at all, and that state is scattered across those windows. Fanal stands at the level of the system and gathers it into one notch on the top edge of the screen: which agent is working, which one is waiting on you, and which one has not been started.
+
+The notch speaks with a lamp, and the colour is the whole message. Grey means the program is not running. Yellow means the client is open and no task is executing. Green means a task is executing. Red means a task has opened a confirmation and needs you. Red outranks green, green outranks yellow, and yellow outranks grey.
 
 [中文说明](README.zh-CN.md)
 
-At rest it is a small black lip, and the window is only as tall as that lip, so it does not cover the browser tabs underneath. It opens on its own when an agent needs you or a task that was running has stopped, and it opens fully while the pointer is over it. It closes as soon as the pointer leaves, and also when you click somewhere else. Clicking a row brings that agent's own window to the front, maximised. Fanal never answers a prompt for you.
+At rest the notch is a small black lip, and the window is only as tall as that lip, so it does not cover the browser tabs underneath. It opens on its own when an agent needs you or a task that was running has stopped, and it opens fully while the pointer is over it. It closes as soon as the pointer leaves, and also when you click somewhere else. Clicking a row brings that agent's own window to the front, maximised. Fanal never answers a prompt for you.
 
 ![The panel open, with Codex waiting and Claude Code working](docs/images/panel.png)
 
@@ -22,6 +26,8 @@ The gear at the bottom of the panel opens settings: which agents are watched, wh
 A lamp in the tray follows the most urgent colour on the board. Red outranks green, green outranks yellow, yellow outranks grey.
 
 ## What it watches
+
+The monitor covers the coding agents on the system, not the conversation inside a single window.
 
 Claude Code, Claude Desktop, Cursor, DeepSeek Harness, Codex, Kimi, Kimi Code, Gemini, Trae, Kiro, Qoder, Antigravity, OpenCode, and Devin. The Codex app and the ChatGPT desktop app are the same program, so they share one lamp.
 
