@@ -1,7 +1,7 @@
 # Fanal — Project Rules
 
 > Extends ~/CLAUDE.md. Project rules override global when conflict.
-> The system-wide task monitor for the coding agents on this machine.
+> One notch at the top of the screen, for the coding agents on this machine.
 > `docs/AGENTS.md` explains a lamp. This file explains how to change the repo.
 
 ## What this is

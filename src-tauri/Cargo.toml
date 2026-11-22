@@ -1,7 +1,7 @@
 [package]
 name = "fanal"
 version = "0.1.0"
-description = "System-wide task monitor for the coding agents on this machine."
+description = "A notch that watches the coding agents on this machine."
 authors = ["everclear077"]
 license = "MIT"
 repository = "https://github.com/everclear077/Fanal"
