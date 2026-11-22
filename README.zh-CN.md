@@ -47,7 +47,11 @@ fanal-core/     灯的判断和会话解析，以及对应的测试
 src-tauri/      桌面应用：进程扫描、窗口聚焦、托盘
 ui/             面板：一个页面、一份样式、一段脚本
 docs/           检测方式的说明，以及上面这些截图
+AGENTS.md       改这个仓库时要遵守的规则
+CHANGELOG.md    每个版本里，使用者新能做什么
 ```
+
+[AGENTS.md](AGENTS.md) 是工作约定。[docs/AGENTS.md](docs/AGENTS.md) 是另一份文件，写的是一盏灯怎么读。
 
 ## 许可证
 

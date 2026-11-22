@@ -10,3 +10,14 @@
 **/.claude/
 **/.codex/
 **/.kimi-code/
+
+# Local to one machine or one session. Not part of the project.
+/HANDOFF.md
+/experience/
+
+# Secrets. Reference them by name; never commit a value.
+.env*
+credentials.json
+*.pem
+*.key
+ai-secrets.env

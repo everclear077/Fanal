@@ -47,7 +47,11 @@ fanal-core/     lamp decisions and session parsers, with their tests
 src-tauri/      the desktop app: process scan, window focus, tray
 ui/             the panel: one page, one stylesheet, one script
 docs/           how detection works, and the screenshots above
+AGENTS.md       rules for working on this repo
+CHANGELOG.md    what a person can do after each release
 ```
+
+[AGENTS.md](AGENTS.md) is the working agreement. [docs/AGENTS.md](docs/AGENTS.md) is a different file: it describes how a lamp is read.
 
 ## License
 
